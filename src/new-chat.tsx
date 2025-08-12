@@ -16,7 +16,7 @@ interface FormValues {
   system?: string;
   chatPrivacy: string;
   projectId?: string;
-  modelId?: "v0-1.5-sm" | "v0-1.5-md" | "v0-1.5-lg";
+  modelId?: "v0-1.5-sm" | "v0-1.5-md" | "v0-1.5-lg" | "v0-gpt-5";
   imageGenerations?: boolean;
   thinking?: boolean;
   scopeId?: string;
@@ -30,7 +30,13 @@ export default function Command() {
   const { scopes: scopesData, isLoadingScopes } = useScopes(activeProfileApiKey);
 
   const { handleSubmit, itemProps, setValue } = useForm<FormValues>({
-    initialValues: { message: "", chatPrivacy: "private", scopeId: activeProfileDefaultScope || "", attachments: [] },
+    initialValues: {
+      message: "",
+      chatPrivacy: "private",
+      scopeId: activeProfileDefaultScope || "",
+      attachments: [],
+      modelId: "v0-gpt-5",
+    },
     onSubmit: async (values) => {
       if (!activeProfileApiKey) {
         showFailureToast("API Key not available. Please set it in Preferences or manage profiles.", {
@@ -157,9 +163,10 @@ export default function Command() {
         title="Model"
         value={itemProps.modelId.value || ""}
         onChange={(newValue) =>
-          itemProps.modelId.onChange?.(newValue as "v0-1.5-sm" | "v0-1.5-md" | "v0-1.5-lg" | undefined)
+          itemProps.modelId.onChange?.(newValue as "v0-1.5-sm" | "v0-1.5-md" | "v0-1.5-lg" | "v0-gpt-5" | undefined)
         }
       >
+        <Form.Dropdown.Item value="v0-gpt-5" title="v0-gpt-5" />
         <Form.Dropdown.Item value="v0-1.5-sm" title="v0-1.5-sm" />
         <Form.Dropdown.Item value="v0-1.5-md" title="v0-1.5-md" />
         <Form.Dropdown.Item value="v0-1.5-lg" title="v0-1.5-lg" />
@@ -207,9 +214,6 @@ export default function Command() {
         <Form.Dropdown.Item value="team-edit" title="Team (Editable)" />
         <Form.Dropdown.Item value="unlisted" title="Unlisted" />
       </Form.Dropdown>
-
-      {/* <Form.Checkbox label="Image Generations" {...itemProps.imageGenerations} />
-      <Form.Checkbox label="Thinking" {...itemProps.thinking} /> */}
     </Form>
   );
 }
