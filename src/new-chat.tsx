@@ -1,7 +1,7 @@
 import { ActionPanel, Action, showToast, Toast, Form, useNavigation, Icon } from "@raycast/api";
 import { useForm, showFailureToast } from "@raycast/utils";
 import type { CreateChatRequest, ScopeSummary } from "./types";
-import ViewChats from "./view-chats";
+import ChatDetail from "./components/ChatDetail";
 import { useProjects } from "./hooks/useProjects";
 import { useActiveProfile } from "./hooks/useActiveProfile";
 import { useScopes } from "./hooks/useScopes";
@@ -75,12 +75,12 @@ export default function Command() {
           delete requestBody.modelConfiguration;
         }
 
-        await v0ApiFetcher<CreateChatResponse>("https://api.v0.dev/v1/chats", {
+        const chatResponse = await v0ApiFetcher<CreateChatResponse>("https://api.v0.dev/v1/chats", {
           method: "POST",
           headers: {
             Authorization: `Bearer ${activeProfileApiKey}`,
             "Content-Type": "application/json",
-            "x-scope": values.scopeId || "",
+            "x-scope": values.scopeId || activeProfileDefaultScope || "",
           },
           body: JSON.stringify(requestBody),
         });
@@ -89,8 +89,13 @@ export default function Command() {
         toast.title = "Chat Created";
         toast.message = "Your new chat has been created successfully!";
 
-        // Push the view-chats component to show the newly created chat
-        push(<ViewChats scopeId={values.scopeId} />);
+        // Navigate to the newly created chat's detail page
+        push(
+          <ChatDetail
+            chatId={chatResponse.id}
+            scopeId={(values.scopeId as string | undefined) || (activeProfileDefaultScope ?? undefined)}
+          />,
+        );
 
         return;
       } catch (error) {
