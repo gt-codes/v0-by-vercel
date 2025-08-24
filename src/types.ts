@@ -11,17 +11,28 @@ export interface ChatSummary {
   shareable: boolean;
   privacy: ChatPrivacy;
   name?: string;
+  /** @deprecated */
+  title?: string;
+  createdAt: string;
   updatedAt?: string;
   favorite: boolean;
   authorId: string;
   projectId?: string;
-  latestVersion?: VersionDetail;
+  webUrl: string;
+  apiUrl: string;
+  latestVersion?: VersionSummary;
 }
 
-export interface VersionFile {
+export interface FileDetail {
   object: "file";
   name: string;
   content: string;
+  locked: boolean;
+}
+
+export interface FileSummary {
+  object: "file";
+  name: string;
 }
 
 export interface VersionDetail {
@@ -29,14 +40,36 @@ export interface VersionDetail {
   object: "version";
   status: "pending" | "completed" | "failed";
   demoUrl?: string;
-  files?: VersionFile[];
+  createdAt: string;
+  updatedAt?: string;
+  files?: FileDetail[];
 }
 
-export interface MessageSummary {
+export interface VersionSummary {
+  id: string;
+  object: "version";
+  status: "pending" | "completed" | "failed";
+  demoUrl?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export type MessageSummary = {
   id: string;
   object: "message";
   content: string;
+  experimental_content?: Array<
+    | [0, unknown[]]
+    | [
+        1,
+        {
+          title?: string;
+          [key: string]: unknown;
+        },
+      ]
+  >;
   createdAt: string;
+  updatedAt?: string;
   type:
     | "message"
     | "forked-block"
@@ -55,30 +88,53 @@ export interface MessageSummary {
     | "auto-fix-with-v0"
     | "sync-git";
   role: "user" | "assistant";
-}
+  finishReason?: "stop" | "length" | "content-filter" | "tool-calls" | "error" | "other" | "unknown";
+  apiUrl: string;
+};
 
-export interface ChatDetailResponse {
+export type ChatDetail = {
   id: string;
   object: "chat";
   shareable: boolean;
   privacy: ChatPrivacy;
   name?: string;
+  /** @deprecated */
+  title?: string;
+  createdAt: string;
   updatedAt?: string;
   favorite: boolean;
   authorId: string;
   projectId?: string;
-  latestVersion?: VersionDetail;
+  webUrl: string;
+  apiUrl: string;
+  latestVersion?: {
+    id: string;
+    object: "version";
+    status: "pending" | "completed" | "failed";
+    demoUrl?: string;
+    createdAt: string;
+    updatedAt?: string;
+    files: FileDetail[];
+  };
+  /** @deprecated */
   url: string;
   messages: MessageSummary[];
   files?: {
     lang: string;
-    meta: {
-      [k: string]: string;
-    };
+    meta: Record<string, unknown>;
     source: string;
   }[];
+  /** @deprecated */
+  demo?: string;
   text: string;
-}
+  modelConfiguration?: {
+    modelId: V0Model;
+    imageGenerations?: boolean;
+    thinking?: boolean;
+  };
+};
+
+export type ChatDetailResponse = ChatDetail;
 
 export interface ChatMetadataResponse {
   git?: {
@@ -101,24 +157,9 @@ export interface DeleteChatResponse {
   deleted: true;
 }
 
-export interface ForkChatResponse {
-  id: string;
-  object: "chat";
-  url: string;
-  shareable: boolean;
-  privacy?: ChatPrivacy;
-  name?: string;
-  updatedAt?: string;
-  favorite: boolean;
-  authorId: string;
-  latestVersion?: {
-    id: string;
-    status: "pending" | "completed" | "failed";
-  };
-  messages: MessageSummary[];
-}
+export type ForkChatResponse = ChatDetail;
 
-export type V0Model = "v0-1.5-sm" | "v0-1.5-md" | "v0-1.5-lg" | "v0-1.0-md" | "v0-gpt-5";
+export type V0Model = "v0-1.5-sm" | "v0-1.5-md" | "v0-1.5-lg" | "v0-gpt-5";
 
 export interface CreateChatRequest {
   message: string;
@@ -126,28 +167,15 @@ export interface CreateChatRequest {
   system?: string;
   chatPrivacy?: ChatPrivacy;
   projectId?: string;
-  model?: V0Model;
   modelConfiguration?: {
+    modelId?: V0Model;
     imageGenerations?: boolean;
     thinking?: boolean;
   };
   responseMode?: "sync" | "async";
 }
 
-export interface CreateChatResponse {
-  id: string;
-  object: "chat";
-  url: string;
-  shareable: boolean;
-  privacy: ChatPrivacy;
-  name?: string;
-  updatedAt: string;
-  favorite: boolean;
-  authorId: string;
-  projectId?: string;
-  latestVersion?: VersionDetail;
-  messages: MessageSummary[];
-}
+export type CreateChatResponse = ChatDetail;
 
 export interface CreateProjectResponse {
   id: string;
@@ -161,8 +189,8 @@ export interface CreateMessageRequest {
   attachments?: Array<{
     url: string;
   }>;
-  model?: V0Model;
   modelConfiguration?: {
+    modelId?: V0Model;
     imageGenerations?: boolean;
     thinking?: boolean;
   };
@@ -176,9 +204,7 @@ export interface CreateMessageResponse {
   url: string;
   files?: {
     lang: string;
-    meta: {
-      [k: string]: string;
-    };
+    meta: Record<string, unknown>;
     source: string;
   }[];
   text: string;
@@ -189,14 +215,31 @@ export interface CreateMessageResponse {
   };
 }
 
-export interface Deployment {
+export interface DeploymentDetail {
   id: string;
   object: "deployment";
+  inspectorUrl: string;
+  chatId: string;
   projectId: string;
-  url: string;
-  status: "BUILDING" | "READY" | "CANCELED" | "ERROR";
-  createdAt: string;
-  updatedAt: string;
+  versionId: string;
+  apiUrl: string;
+  webUrl: string;
+}
+
+export interface DeploymentSummary {
+  id: string;
+  object: "deployment";
+  inspectorUrl: string;
+  chatId: string;
+  projectId: string;
+  versionId: string;
+  apiUrl: string;
+  webUrl: string;
+}
+
+export interface FindDeploymentsResponse {
+  object: "list";
+  data: DeploymentDetail[];
 }
 
 export interface InitializeChatResponse {
@@ -214,21 +257,26 @@ export interface InitializeChatResponse {
   messages: MessageSummary[];
   files?: {
     lang: string;
-    meta: {
-      [k: string]: string;
-    };
+    meta: Record<string, unknown>;
     source: string;
   }[];
   text: string;
 }
 
-export interface ProjectDetail {
+export type ProjectDetail = {
   id: string;
   object: "project";
   name: string;
-  chats: ChatSummary[];
+  privacy: "private" | "team";
   vercelProjectId?: string;
-}
+  createdAt: string;
+  updatedAt?: string;
+  apiUrl: string;
+  webUrl: string;
+  description?: string;
+  instructions?: string;
+  chats: ChatSummary[];
+};
 
 export interface FindProjectsResponse {
   object: "list";
@@ -279,7 +327,7 @@ export enum ApiVersion {
 
 export interface File {
   lang: string;
-  meta: Record<string, string>;
+  meta: Record<string, unknown>;
   source: string;
 }
 
@@ -331,4 +379,295 @@ export interface AssignProjectResponse {
   object: string;
   id: string;
   assigned: boolean;
+}
+
+// Additional API Schemas (not all currently used by the UI but kept for completeness)
+
+export interface MessageDetail extends MessageSummary {
+  chatId: string;
+}
+
+export type MessageSummaryList = {
+  object: "list";
+  data: MessageSummary[];
+  pagination: {
+    hasMore: boolean;
+    nextCursor?: string;
+    nextUrl?: string;
+  };
+};
+
+export interface ProductDetailSchema {
+  object: "product";
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  iconUrl: string;
+  iconBackgroundColor?: string;
+}
+
+export interface ProductListSchema {
+  object: "list";
+  data: {
+    object: "product";
+    id: string;
+    slug: string;
+    name: string;
+    description: string;
+    iconUrl: string;
+  }[];
+}
+
+export interface ProductSummarySchema {
+  object: "product";
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  iconUrl: string;
+}
+
+export type ProjectSummary = {
+  id: string;
+  object: "project";
+  name: string;
+  privacy: "private" | "team";
+  vercelProjectId?: string;
+  createdAt: string;
+  updatedAt?: string;
+  apiUrl: string;
+  webUrl: string;
+};
+
+export type SearchResultItem = {
+  id: string;
+  object: "chat" | "project";
+  name: string;
+  createdAt: string;
+  updatedAt?: string;
+  apiUrl: string;
+  webUrl: string;
+};
+
+export interface UserDetail {
+  id: string;
+  object: "user";
+  name?: string;
+  email: string;
+  avatar: string;
+}
+
+export interface VercelProjectDetail {
+  id: string;
+  object: "vercel_project";
+  name: string;
+}
+
+export interface VercelProjectSummary {
+  id: string;
+  object: "vercel_project";
+  name: string;
+}
+
+export type VersionSummaryList = {
+  object: "list";
+  data: VersionSummary[];
+  pagination: {
+    hasMore: boolean;
+    nextCursor?: string;
+    nextUrl?: string;
+  };
+};
+
+export interface EnvironmentVariableDetailSchema {
+  id: string;
+  object: "environment_variable";
+  key: string;
+  value: string;
+  decrypted: boolean;
+  createdAt: number;
+  updatedAt?: number;
+}
+
+export interface EnvironmentVariableSummarySchema {
+  id: string;
+  object: "environment_variable";
+  key: string;
+  value: string;
+  decrypted: boolean;
+  createdAt: number;
+  updatedAt?: number;
+}
+
+export interface EnvironmentVariablesListSchema {
+  object: "list";
+  data: {
+    id: string;
+    object: "environment_variable";
+    key: string;
+    value: string;
+    decrypted: boolean;
+    createdAt: number;
+    updatedAt?: number;
+  }[];
+}
+
+export type HookDetail = {
+  id: string;
+  object: "hook";
+  name: string;
+  events: Array<
+    "chat.created" | "chat.updated" | "chat.deleted" | "message.created" | "message.updated" | "message.deleted"
+  >;
+  chatId?: string;
+  url: string;
+};
+
+export type HookEventDetail = {
+  id: string;
+  object: "hook_event";
+  event: "chat.created" | "chat.updated" | "chat.deleted" | "message.created" | "message.updated" | "message.deleted";
+  status?: "pending" | "success" | "error";
+  createdAt: string;
+};
+
+export interface HookSummary {
+  id: string;
+  object: "hook";
+  name: string;
+}
+
+export interface IntegrationConnectionDetailSchema {
+  object: "integration_connection";
+  id: string;
+  connected: boolean;
+  integration: {
+    id: string;
+    object: "integration";
+    slug: string;
+    name: string;
+  };
+  metadata?: Record<string, unknown>;
+}
+
+export interface IntegrationConnectionListSchema {
+  object: "list";
+  data: {
+    object: "integration_connection";
+    id: string;
+    connected: boolean;
+    integration: {
+      id: string;
+      object: "integration";
+      slug: string;
+      name: string;
+    };
+  }[];
+}
+
+export interface IntegrationConnectionSummarySchema {
+  object: "integration_connection";
+  id: string;
+  connected: boolean;
+  integration: {
+    id: string;
+    object: "integration";
+    slug: string;
+    name: string;
+  };
+}
+
+export interface IntegrationDetailSchema {
+  id: string;
+  object: "integration";
+  slug: string;
+  name: string;
+  description: string;
+  iconUrl: string;
+}
+
+export interface IntegrationListSchema {
+  object: "list";
+  data: {
+    id: string;
+    object: "integration";
+    slug: string;
+    name: string;
+    description: string;
+    iconUrl: string;
+  }[];
+}
+
+export interface IntegrationSummarySchema {
+  id: string;
+  object: "integration";
+  slug: string;
+  name: string;
+}
+
+export interface RateLimitsFindResponse {
+  remaining?: number;
+  reset?: number;
+  limit: number;
+}
+
+export type UserGetResponse = UserDetail;
+
+export type UserGetBillingResponse =
+  | {
+      billingType: "token";
+      data: {
+        plan: string;
+        billingMode?: "test";
+        role: string;
+        billingCycle: {
+          start: number;
+          end: number;
+        };
+        balance: {
+          remaining: number;
+          total: number;
+        };
+        onDemand: {
+          balance: number;
+          blocks?: {
+            expirationDate?: number;
+            effectiveDate: number;
+            originalBalance: number;
+            currentBalance: number;
+          }[];
+        };
+      };
+    }
+  | {
+      billingType: "legacy";
+      data: {
+        remaining?: number;
+        reset?: number;
+        limit: number;
+      };
+    };
+
+export interface UserGetPlanResponse {
+  object: "plan";
+  plan: string;
+  billingCycle: {
+    start: number;
+    end: number;
+  };
+  balance: {
+    remaining: number;
+    total: number;
+  };
+}
+
+export interface UserGetScopesResponse {
+  object: "list";
+  data: ScopeSummary[];
+}
+
+export interface V0ClientConfig {
+  apiKey?: string;
+  baseUrl?: string;
 }

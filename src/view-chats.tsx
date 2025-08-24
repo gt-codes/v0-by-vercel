@@ -13,6 +13,7 @@ import { ScopeDropdown } from "./components/ScopeDropdown";
 import { useV0Api } from "./hooks/useV0Api";
 import { v0ApiFetcher, V0ApiError } from "./lib/v0-api-utils";
 import ChatMetadataDetail from "./components/ChatMetadataDetail";
+import ChatDeploymentsList from "./components/ChatDeploymentsList";
 import { useProjects } from "./hooks/useProjects";
 
 export default function Command(props: { scopeId?: string; projectId?: string }) {
@@ -296,6 +297,22 @@ export default function Command(props: { scopeId?: string; projectId?: string })
                     icon={Icon.Globe}
                     shortcut={Keyboard.Shortcut.Common.Open}
                   />
+                  {chat.projectId && chat.latestVersion?.id && (
+                    <Action.Push
+                      title="View Deployments"
+                      icon={Icon.ArrowRight}
+                      target={
+                        <ChatDeploymentsList
+                          chatId={chat.id}
+                          projectId={chat.projectId}
+                          versionId={chat.latestVersion.id}
+                        />
+                      }
+                      shortcut={{ modifiers: ["cmd", "shift"], key: "d" }}
+                    />
+                  )}
+                </ActionPanel.Section>
+                <ActionPanel.Section>
                   <Action.Push
                     title="View Metadata"
                     icon={Icon.Tag}
