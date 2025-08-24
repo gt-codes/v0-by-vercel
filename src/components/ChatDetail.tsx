@@ -158,6 +158,7 @@ export default function ChatDetail({ chatId, scopeId }: { chatId: string; scopeI
 
   return (
     <List
+      isShowingDetail
       navigationTitle={data?.name || "Untitled Chat"}
       searchBarAccessory={
         <List.Dropdown
@@ -199,10 +200,9 @@ export default function ChatDetail({ chatId, scopeId }: { chatId: string; scopeI
         .map((message) => (
           <List.Item
             key={message.id}
-            // title={getMessageTitle(message.role)}
             title={getMessagePreview(message.content)}
+            detail={<List.Item.Detail markdown={formatFullMessageContent(message.content)} />}
             accessories={[
-              { date: new Date(message.createdAt || ""), tooltip: "Message timestamp" },
               {
                 icon: getMessageIcon(message.role),
                 tooltip: `${message.role === "user" ? "You" : "v0"} sent this message`,
@@ -210,38 +210,6 @@ export default function ChatDetail({ chatId, scopeId }: { chatId: string; scopeI
             ]}
             actions={
               <ActionPanel>
-                <Action.Push
-                  title="View Full Message"
-                  target={
-                    <Detail
-                      markdown={formatFullMessageContent(message.content)}
-                      metadata={
-                        <Detail.Metadata>
-                          <Detail.Metadata.Label title="Sent at" text={new Date(message.createdAt).toLocaleString()} />
-                          <Detail.Metadata.Label title="From" text={`${message.role === "user" ? "You" : "v0"}`} />
-                          <Detail.Metadata.Label title="Type" text={message.type} />
-                          {metadata?.project?.name && (
-                            <Detail.Metadata.Link
-                              title="Project"
-                              text={metadata.project.name}
-                              target={metadata.project.url || ""}
-                            />
-                          )}
-                          {metadata?.git?.branch && (
-                            <Detail.Metadata.Label title="Git Branch" text={metadata.git.branch} />
-                          )}
-                          {metadata?.git?.commit && (
-                            <Detail.Metadata.Label title="Git Commit" text={metadata.git.commit} />
-                          )}
-                          {metadata?.deployment?.id && (
-                            <Detail.Metadata.Label title="Deployment ID" text={metadata.deployment.id} />
-                          )}
-                        </Detail.Metadata>
-                      }
-                    />
-                  }
-                  icon={Icon.Eye}
-                />
                 <Action.OpenInBrowser
                   icon={Icon.Globe}
                   title="View Chat in Browser"
