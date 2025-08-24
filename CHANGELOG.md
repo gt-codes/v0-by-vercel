@@ -6,6 +6,10 @@
 
 - Project Environment Variables: view (masked with toggle), add, update, copy, and delete with auto-refresh.
 
+### Changed
+
+- Show full message contents alongside each message preview in the chat messages list.
+
 ## [1.1.0] - 2025-08-12
 
 ### Added
