@@ -1,14 +1,16 @@
-import { ActionPanel, Action, showToast, Toast, Form, useNavigation, Icon } from "@raycast/api";
+import { ActionPanel, Action, Form, useNavigation, Icon } from "@raycast/api";
 import { useForm, showFailureToast } from "@raycast/utils";
 import type { CreateChatRequest, ScopeSummary } from "./types";
-import ChatDetail from "./components/ChatDetail";
+// import ChatDetail from "./components/ChatDetail";
+import StreamingNewChat from "./components/StreamingNewChat";
 import { useProjects } from "./hooks/useProjects";
 import { useActiveProfile } from "./hooks/useActiveProfile";
 import { useScopes } from "./hooks/useScopes";
-import { v0ApiFetcher, V0ApiError } from "./lib/v0-api-utils";
+import { V0ApiError } from "./lib/v0-api-utils";
+// import { streamV0 } from "./lib/v0-stream";
 import InitializeChat from "./initialize-chat";
 import { useEffect } from "react";
-import type { CreateChatResponse } from "./types";
+// import type { CreateChatResponse } from "./types";
 import fs from "fs/promises";
 
 interface FormValues {
@@ -44,10 +46,7 @@ export default function Command() {
         });
         return;
       }
-      const toast = await showToast({
-        style: Toast.Style.Animated,
-        title: "Creating chat...",
-      });
+      // Minimal streaming view; no long-running toast
 
       try {
         const requestBody: CreateChatRequest = {
@@ -60,7 +59,7 @@ export default function Command() {
             ...(typeof values.imageGenerations === "boolean" && { imageGenerations: values.imageGenerations }),
             ...(typeof values.thinking === "boolean" && { thinking: values.thinking }),
           },
-          responseMode: "async",
+          responseMode: "experimental_stream",
         };
 
         if (values.attachments && values.attachments.length > 0) {
@@ -81,24 +80,11 @@ export default function Command() {
           delete requestBody.modelConfiguration;
         }
 
-        const chatResponse = await v0ApiFetcher<CreateChatResponse>("https://api.v0.dev/v1/chats", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${activeProfileApiKey}`,
-            "Content-Type": "application/json",
-            "x-scope": values.scopeId || activeProfileDefaultScope || "",
-          },
-          body: JSON.stringify(requestBody),
-        });
-
-        toast.style = Toast.Style.Success;
-        toast.title = "Chat Created";
-        toast.message = "Your new chat has been created successfully!";
-
-        // Navigate to the newly created chat's detail page
+        // Push minimal streaming view to validate SSE
         push(
-          <ChatDetail
-            chatId={chatResponse.id}
+          <StreamingNewChat
+            request={requestBody}
+            apiKey={activeProfileApiKey}
             scopeId={(values.scopeId as string | undefined) || (activeProfileDefaultScope ?? undefined)}
           />,
         );
