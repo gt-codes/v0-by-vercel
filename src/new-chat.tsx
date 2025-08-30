@@ -1,4 +1,4 @@
-import { ActionPanel, Action, Form, useNavigation, Icon } from "@raycast/api";
+import { ActionPanel, Action, showToast, Toast, Form, useNavigation, Icon } from "@raycast/api";
 import { useForm, showFailureToast } from "@raycast/utils";
 import type { CreateChatRequest, ScopeSummary } from "./types";
 // import ChatDetail from "./components/ChatDetail";
@@ -7,7 +7,6 @@ import { useProjects } from "./hooks/useProjects";
 import { useActiveProfile } from "./hooks/useActiveProfile";
 import { useScopes } from "./hooks/useScopes";
 import { V0ApiError } from "./lib/v0-api-utils";
-// import { streamV0 } from "./lib/v0-stream";
 import InitializeChat from "./initialize-chat";
 import { useEffect } from "react";
 // import type { CreateChatResponse } from "./types";
@@ -46,7 +45,10 @@ export default function Command() {
         });
         return;
       }
-      // Minimal streaming view; no long-running toast
+      const toast = await showToast({
+        style: Toast.Style.Animated,
+        title: "Creating chat...",
+      });
 
       try {
         const requestBody: CreateChatRequest = {
@@ -80,7 +82,8 @@ export default function Command() {
           delete requestBody.modelConfiguration;
         }
 
-        // Push minimal streaming view to validate SSE
+        // Use the streaming UI for the create flow
+        toast.hide();
         push(
           <StreamingNewChat
             request={requestBody}
