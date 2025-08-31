@@ -86,7 +86,7 @@ export default function Command() {
         toast.hide();
         push(
           <StreamingNewChat
-            request={requestBody}
+            request={{ ...requestBody, responseMode: "experimental_stream" }}
             apiKey={activeProfileApiKey}
             scopeId={(values.scopeId as string | undefined) || (activeProfileDefaultScope ?? undefined)}
           />,

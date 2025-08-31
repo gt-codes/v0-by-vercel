@@ -6,12 +6,14 @@ import type { ChatDetailResponse } from "../types";
 import type { CreateChatRequest } from "../types";
 
 interface StreamingNewChatProps {
-  request: CreateChatRequest;
+  // One of request (create new chat) or chatId (open existing)
+  request?: CreateChatRequest;
+  chatId?: string;
   apiKey: string;
   scopeId?: string;
 }
 
-export default function StreamingNewChat({ request, apiKey, scopeId }: StreamingNewChatProps) {
+export default function StreamingNewChat({ request, chatId, apiKey, scopeId }: StreamingNewChatProps) {
   const [assistantContent, setAssistantContent] = useState("");
   const [finalChatId, setChatId] = useState<string | undefined>(undefined);
   const chatIdRef = useRef<string | undefined>(undefined);
@@ -39,6 +41,26 @@ export default function StreamingNewChat({ request, apiKey, scopeId }: Streaming
     // Remove dangling start of a footnote at the end
     out = out.replace(/\[\^[^\]]*$/g, "");
     return out;
+  };
+
+  const appendSmart = (prev: string, incoming: string) => {
+    if (!incoming) return prev;
+    let chunk = incoming;
+    // De-duplicate overlaps between tail of prev and head of chunk
+    const maxOverlap = Math.min(20, prev.length, chunk.length);
+    for (let k = maxOverlap; k > 0; k--) {
+      if (prev.slice(-k) === chunk.slice(0, k)) {
+        chunk = chunk.slice(k);
+        break;
+      }
+    }
+    // Add a space between alpha/number boundaries if needed
+    const last = prev.slice(-1);
+    const first = chunk.charAt(0);
+    if (last && first && /[A-Za-z0-9]/.test(last) && /[A-Za-z0-9]/.test(first)) {
+      chunk = " " + chunk;
+    }
+    return prev + chunk;
   };
 
   const formatFullMessageContent = (content: string) => {
@@ -81,7 +103,9 @@ export default function StreamingNewChat({ request, apiKey, scopeId }: Streaming
     return `${previewContent.substring(0, maxLength).trim()}...`;
   };
 
+  // Create-chat streaming mode
   useEffect(() => {
+    if (!request) return;
     setAssistantContent("");
     setIsStreaming(true);
     // Seed UI immediately: user message and an assistant placeholder at the top
@@ -100,7 +124,7 @@ export default function StreamingNewChat({ request, apiKey, scopeId }: Streaming
       body: { ...request, responseMode: "experimental_stream" },
       onDelta: (text) => {
         const chunk = sanitizeMarkdown(text);
-        setAssistantContent((prev) => prev + chunk);
+        setAssistantContent((prev) => appendSmart(prev, chunk));
         setMessages((prev) => {
           // Update the current streaming placeholder by id
           const streamId = currentStreamIdRef.current;
@@ -117,7 +141,7 @@ export default function StreamingNewChat({ request, apiKey, scopeId }: Streaming
             ];
           }
           const updated = [...prev];
-          updated[idx] = { ...updated[idx], content: updated[idx].content + chunk };
+          updated[idx] = { ...updated[idx], content: appendSmart(updated[idx].content, chunk) };
           return updated;
         });
       },
@@ -211,6 +235,36 @@ export default function StreamingNewChat({ request, apiKey, scopeId }: Streaming
     };
   }, [request, apiKey, scopeId]);
 
+  // Existing chat mode: load messages and idle until user sends follow-up
+  useEffect(() => {
+    const loadExisting = async () => {
+      if (!chatId) return;
+      setIsStreaming(false);
+      try {
+        const detail = await v0ApiFetcher<ChatDetailResponse>(`https://api.v0.dev/v1/chats/${chatId}`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "x-scope": scopeId || "",
+          },
+        });
+        if (detail?.messages) {
+          type M = { id: string; role: "user" | "assistant"; content: string; createdAt: string };
+          const rows = (detail.messages as M[]).map((m) => ({
+            id: m.id,
+            role: m.role,
+            content: sanitizeMarkdown(m.content || ""),
+            createdAt: m.createdAt || nowIso(),
+          }));
+          setMessages(sortNewestFirst(rows));
+        }
+      } catch {
+        // ignore
+      }
+    };
+    void loadExisting();
+  }, [chatId, apiKey, scopeId]);
+
   const preview = assistantContent
     ? formatPreviewContent(assistantContent)
     : isStreaming
@@ -221,7 +275,7 @@ export default function StreamingNewChat({ request, apiKey, scopeId }: Streaming
     const trimmed = text.trim();
     if (!trimmed) return;
     if (isStreaming) return;
-    const cid = chatIdRef.current || finalChatId;
+    const cid = chatIdRef.current || finalChatId || chatId;
     if (!cid) return;
     // Optimistic user + placeholder assistant
     const followupStreamId = `assistant-stream-${Date.now()}`;
@@ -243,7 +297,7 @@ export default function StreamingNewChat({ request, apiKey, scopeId }: Streaming
       body: { message: trimmed, responseMode: "experimental_stream" },
       onDelta: (delta) => {
         const chunk = sanitizeMarkdown(delta);
-        setAssistantContent((prev) => prev + chunk);
+        setAssistantContent((prev) => appendSmart(prev, chunk));
         setMessages((prev) => {
           const streamId = currentStreamIdRef.current;
           const idx = prev.findIndex((r) => r.id === streamId);
@@ -259,7 +313,7 @@ export default function StreamingNewChat({ request, apiKey, scopeId }: Streaming
             ];
           }
           const updated = [...prev];
-          updated[idx] = { ...updated[idx], content: updated[idx].content + chunk };
+          updated[idx] = { ...updated[idx], content: appendSmart(updated[idx].content, chunk) };
           return updated;
         });
       },
