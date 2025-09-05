@@ -5,15 +5,15 @@
 ### Added
 
 - Project Environment Variables: view (masked with toggle), add, update, copy, and delete with auto-refresh.
-- Chat responses now stream in
-- Open existing chats from the list in a streaming detail view.
-- Follow-ups: ask additional questions from chat detail.
+- Chat responses now stream in as chunks are received
+- Open existing chats from the list in a detail view
+- Follow-ups: ask additional questions from chat detail with seamless streaming integration
 
 ### Changed
 
 - Show full message contents alongside each message preview in the chat messages list.
-- Refactor chat UI for streaming with clearer loading states and formatting.
-- Sanitize streamed content and fetch full text after the stream for consistency.
+- Refactor chat UI for streaming with clearer loading states and formatting
+- Improved streaming reliability: prevent interruptions during initial chat creation and follow-up messages
 
 ## [1.1.0] - 2025-08-12
 

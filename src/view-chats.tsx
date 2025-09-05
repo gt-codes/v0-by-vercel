@@ -2,7 +2,7 @@ import { ActionPanel, Detail, List, Action, Icon, showToast, Toast, confirmAlert
 import { showFailureToast } from "@raycast/utils";
 import type { ChatSummary, FindChatsResponse, ForkChatResponse, ProjectChatsResponse } from "./types";
 // import ChatDetail from "./components/ChatDetail";
-import StreamingNewChat from "./components/StreamingNewChat";
+import ChatMessages from "./components/ChatMessages";
 import AddMessage from "./components/AddMessage";
 import { useNavigation } from "@raycast/api";
 import AssignProjectForm from "./components/AssignProjectForm";
@@ -170,7 +170,7 @@ export default function Command(props: { scopeId?: string; projectId?: string })
 
       // Navigate to the new chat detail (streaming UI)
       push(
-        <StreamingNewChat
+        <ChatMessages
           chatId={newChatResponse.id}
           apiKey={activeProfileApiKey || ""}
           scopeId={activeProfileDefaultScope || undefined}
@@ -246,7 +246,7 @@ export default function Command(props: { scopeId?: string; projectId?: string })
                 <Action.Push
                   title="View Messages"
                   target={
-                    <StreamingNewChat
+                    <ChatMessages
                       chatId={chat.id}
                       apiKey={activeProfileApiKey || ""}
                       scopeId={selectedScopeFilter || undefined}

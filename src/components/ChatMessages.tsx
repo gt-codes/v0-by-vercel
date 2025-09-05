@@ -8,14 +8,14 @@ import ChatFilesDetail from "./ChatFilesDetail";
 import type { CreateChatRequest } from "../types";
 
 /**
- * StreamingNewChat Component
+ * ChatMessages Component
  *
  * Handles both creating new chats with streaming responses and viewing existing chats.
  * Features real-time streaming updates, follow-up message support, and smart revalidation
  * to ensure consistent state between streamed content and final server data.
  */
 
-interface StreamingNewChatProps {
+interface ChatMessagesProps {
   // One of request (create new chat) or chatId (open existing)
   request?: CreateChatRequest;
   chatId?: string;
@@ -23,7 +23,7 @@ interface StreamingNewChatProps {
   scopeId?: string;
 }
 
-export default function StreamingNewChat({ request, chatId, apiKey, scopeId }: StreamingNewChatProps) {
+export default function ChatMessages({ request, chatId, apiKey, scopeId }: ChatMessagesProps) {
   // Core state management
   const [assistantContent, setAssistantContent] = useState("");
   const [finalChatId, setChatId] = useState<string | undefined>(undefined);
