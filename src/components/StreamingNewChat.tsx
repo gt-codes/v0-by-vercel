@@ -1,8 +1,11 @@
 import { List, ActionPanel, Action, Icon } from "@raycast/api";
+import { useCachedPromise } from "@raycast/utils";
 import { useEffect, useRef, useState } from "react";
 import { streamV0 } from "../lib/v0-stream";
 import { v0ApiFetcher } from "../lib/v0-api-utils";
-import type { ChatDetailResponse } from "../types";
+import type { ChatDetailResponse, VersionDetail } from "../types";
+import ChatFilesDetail from "./ChatFilesDetail";
+// import ChatFilesDetail from "./ChatFilesDetail";
 import type { CreateChatRequest } from "../types";
 
 interface StreamingNewChatProps {
@@ -21,6 +24,9 @@ export default function StreamingNewChat({ request, chatId, apiKey, scopeId }: S
   const abortRef = useRef<(() => void) | null>(null);
   const [searchText, setSearchText] = useState("");
   const currentStreamIdRef = useRef<string | undefined>(undefined);
+  const [isInitializing, setIsInitializing] = useState(false);
+  const [chatTitle, setChatTitle] = useState<string | undefined>(undefined);
+  const [latestVersion, setLatestVersion] = useState<VersionDetail | undefined>(undefined);
 
   type MessageRow = { id: string; role: "user" | "assistant"; content: string; createdAt?: string };
   const [messages, setMessages] = useState<MessageRow[]>([]);
@@ -40,6 +46,10 @@ export default function StreamingNewChat({ request, chatId, apiKey, scopeId }: S
     out = out.replace(/^\s*\[\^[^\]]+\]:.*$/gm, "");
     // Remove dangling start of a footnote at the end
     out = out.replace(/\[\^[^\]]*$/g, "");
+    // Hide streaming-only file markers and internal part labels
+    out = out.replace(/\[V0_FILE][^\n]*\n?/g, "");
+    out = out.replace(/AssistantMessageContentPart/g, "");
+    out = out.replace(/Codeblock/g, "");
     return out;
   };
 
@@ -53,12 +63,6 @@ export default function StreamingNewChat({ request, chatId, apiKey, scopeId }: S
         chunk = chunk.slice(k);
         break;
       }
-    }
-    // Add a space between alpha/number boundaries if needed
-    const last = prev.slice(-1);
-    const first = chunk.charAt(0);
-    if (last && first && /[A-Za-z0-9]/.test(last) && /[A-Za-z0-9]/.test(first)) {
-      chunk = " " + chunk;
     }
     return prev + chunk;
   };
@@ -123,8 +127,7 @@ export default function StreamingNewChat({ request, chatId, apiKey, scopeId }: S
       },
       body: { ...request, responseMode: "experimental_stream" },
       onDelta: (text) => {
-        const chunk = sanitizeMarkdown(text);
-        setAssistantContent((prev) => appendSmart(prev, chunk));
+        setAssistantContent((prev) => sanitizeMarkdown(appendSmart(prev, text)));
         setMessages((prev) => {
           // Update the current streaming placeholder by id
           const streamId = currentStreamIdRef.current;
@@ -134,14 +137,17 @@ export default function StreamingNewChat({ request, chatId, apiKey, scopeId }: S
               {
                 id: streamId || `assistant-stream-${Date.now()}`,
                 role: "assistant",
-                content: chunk,
+                content: sanitizeMarkdown(text),
                 createdAt: nowIso(),
               },
               ...prev,
             ];
           }
           const updated = [...prev];
-          updated[idx] = { ...updated[idx], content: appendSmart(updated[idx].content, chunk) };
+          updated[idx] = {
+            ...updated[idx],
+            content: sanitizeMarkdown(appendSmart(updated[idx].content, text)),
+          };
           return updated;
         });
       },
@@ -149,6 +155,15 @@ export default function StreamingNewChat({ request, chatId, apiKey, scopeId }: S
         if (chat?.id) {
           chatIdRef.current = chat.id;
           setChatId(chat.id);
+        }
+        // capture title/name only in create-flow (no chatId yet)
+        if (!chatId) {
+          const title =
+            (chat as { name?: string; title?: string } | undefined)?.name ||
+            (chat as { name?: string; title?: string } | undefined)?.title;
+          if (typeof title === "string" && title.trim().length > 0) {
+            setChatTitle(title);
+          }
         }
         if (chat?.messages && Array.isArray(chat.messages)) {
           type M = { id?: string; role: "user" | "assistant"; content?: string; createdAt?: string };
@@ -189,6 +204,9 @@ export default function StreamingNewChat({ request, chatId, apiKey, scopeId }: S
             // Not streaming: show newest-first from snapshot
             return newRows;
           });
+          // Capture latestVersion when available during streaming updates (create flow)
+          const v = (chat as unknown as { latestVersion?: VersionDetail })?.latestVersion;
+          if (v) setLatestVersion(v);
         }
       },
       onDone: async () => {
@@ -215,6 +233,7 @@ export default function StreamingNewChat({ request, chatId, apiKey, scopeId }: S
                 return cloned;
               });
             }
+            if (detail?.latestVersion) setLatestVersion(detail.latestVersion);
           }
         } catch {
           // ignore fetch errors here; we already have streamed content
@@ -235,41 +254,99 @@ export default function StreamingNewChat({ request, chatId, apiKey, scopeId }: S
     };
   }, [request, apiKey, scopeId]);
 
-  // Existing chat mode: load messages and idle until user sends follow-up
-  useEffect(() => {
-    const loadExisting = async () => {
-      if (!chatId) return;
-      setIsStreaming(false);
-      try {
-        const detail = await v0ApiFetcher<ChatDetailResponse>(`https://api.v0.dev/v1/chats/${chatId}`, {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "x-scope": scopeId || "",
-          },
-        });
-        if (detail?.messages) {
-          type M = { id: string; role: "user" | "assistant"; content: string; createdAt: string };
-          const rows = (detail.messages as M[]).map((m) => ({
-            id: m.id,
-            role: m.role,
-            content: sanitizeMarkdown(m.content || ""),
-            createdAt: m.createdAt || nowIso(),
-          }));
-          setMessages(sortNewestFirst(rows));
+  // Existing chat mode: useCachedPromise to fetch and cache messages
+  const { revalidate: revalidateChat } = useCachedPromise(
+    async (id: string, token: string, scope: string) => {
+      const detail = await v0ApiFetcher<ChatDetailResponse>(`https://api.v0.dev/v1/chats/${id}`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "x-scope": scope || "",
+        },
+      });
+      return detail;
+    },
+    [chatId || "", apiKey, scopeId || ""],
+    {
+      execute: !!chatId && !!apiKey,
+      keepPreviousData: true,
+      onWillExecute: () => {
+        if (chatId) {
+          setIsStreaming(false);
+          setIsInitializing(true);
         }
-      } catch {
-        // ignore
-      }
-    };
-    void loadExisting();
-  }, [chatId, apiKey, scopeId]);
+      },
+      onData: (detail) => {
+        if (!detail?.messages) {
+          setIsInitializing(false);
+          return;
+        }
+        const d = detail as unknown as { name?: string; title?: string };
+        if (d?.name || d?.title) {
+          setChatTitle((d.name || d.title) as string);
+        }
+        if (detail?.latestVersion) setLatestVersion(detail.latestVersion);
+        type M = { id: string; role: "user" | "assistant"; content: string; createdAt: string };
+        const rows = (detail.messages as M[]).map((m) => ({
+          id: m.id,
+          role: m.role,
+          content: sanitizeMarkdown(m.content || ""),
+          createdAt: m.createdAt || nowIso(),
+        }));
+        setMessages((prev) => {
+          // If we are not currently streaming, just set newest-first
+          if (!isStreaming) return sortNewestFirst(rows);
+          // If streaming, do not clobber the streaming placeholder; merge user rows only
+          const users = rows.filter((r) => r.role === "user");
+          const existingUserContents = new Set(prev.filter((r) => r.role === "user").map((r) => r.content.trim()));
+          const merged = [...prev];
+          users.filter((u) => !existingUserContents.has(u.content.trim())).forEach((u) => merged.push(u));
+          return sortNewestFirst(merged);
+        });
+        setIsInitializing(false);
+      },
+    },
+  );
 
   const preview = assistantContent
     ? formatPreviewContent(assistantContent)
     : isStreaming
       ? "🧠 v0 is thinking…"
       : "Ready";
+
+  const getCurrentChatId = () => chatIdRef.current || finalChatId || chatId || "";
+
+  const renderActions = () => (
+    <ActionPanel>
+      <Action
+        title="Ask"
+        icon={Icon.ArrowRight}
+        shortcut={{ modifiers: ["cmd"], key: "enter" }}
+        onAction={() => sendFollowUp(searchText)}
+      />
+      <Action.OpenInBrowser
+        icon={Icon.Globe}
+        title="View Chat in Browser"
+        url={`https://v0.dev/chat/${getCurrentChatId()}`}
+      />
+      {latestVersion?.files && latestVersion.files.length > 0 && (
+        <Action.Push
+          title="View Latest Files"
+          icon={Icon.Document}
+          target={<ChatFilesDetail files={latestVersion.files} />}
+          shortcut={{ modifiers: ["cmd"], key: "f" }}
+        />
+      )}
+      {latestVersion?.demoUrl && (
+        <Action.OpenInBrowser
+          title="View Demo"
+          icon={Icon.Play}
+          url={latestVersion.demoUrl}
+          shortcut={{ modifiers: ["cmd"], key: "d" }}
+        />
+      )}
+    </ActionPanel>
+  );
 
   const sendFollowUp = (text: string) => {
     const trimmed = text.trim();
@@ -296,8 +373,7 @@ export default function StreamingNewChat({ request, chatId, apiKey, scopeId }: S
       },
       body: { message: trimmed, responseMode: "experimental_stream" },
       onDelta: (delta) => {
-        const chunk = sanitizeMarkdown(delta);
-        setAssistantContent((prev) => appendSmart(prev, chunk));
+        setAssistantContent((prev) => sanitizeMarkdown(appendSmart(prev, delta)));
         setMessages((prev) => {
           const streamId = currentStreamIdRef.current;
           const idx = prev.findIndex((r) => r.id === streamId);
@@ -306,20 +382,26 @@ export default function StreamingNewChat({ request, chatId, apiKey, scopeId }: S
               {
                 id: streamId || `assistant-stream-${Date.now()}`,
                 role: "assistant",
-                content: chunk,
+                content: sanitizeMarkdown(delta),
                 createdAt: nowIso(),
               },
               ...prev,
             ];
           }
           const updated = [...prev];
-          updated[idx] = { ...updated[idx], content: appendSmart(updated[idx].content, chunk) };
+          updated[idx] = {
+            ...updated[idx],
+            content: sanitizeMarkdown(appendSmart(updated[idx].content, delta)),
+          };
           return updated;
         });
       },
-      onDone: () => {
+      onDone: async () => {
         setIsStreaming(false);
         abortRef.current = null;
+        try {
+          await revalidateChat();
+        } catch {}
       },
       onError: () => {
         setIsStreaming(false);
@@ -330,10 +412,19 @@ export default function StreamingNewChat({ request, chatId, apiKey, scopeId }: S
     abortRef.current = abort;
   };
 
+  // During initial fetch of existing chat, show a simple loading list (no detail pane)
+  if (isInitializing) {
+    return (
+      <List navigationTitle={chatTitle || "Getting Chat…"}>
+        <List.EmptyView title="Getting chat…" description="Fetching messages from v0" />
+      </List>
+    );
+  }
+
   return (
     <List
       isShowingDetail
-      navigationTitle="New Chat (Streaming)"
+      navigationTitle={chatTitle || "New Chat (Streaming)"}
       searchBarPlaceholder="Ask another question…"
       searchText={searchText}
       onSearchTextChange={setSearchText}
@@ -347,16 +438,7 @@ export default function StreamingNewChat({ request, chatId, apiKey, scopeId }: S
               markdown={assistantContent ? formatFullMessageContent(assistantContent) : "🧠 v0 is thinking…_"}
             />
           }
-          actions={
-            <ActionPanel>
-              <Action
-                title="Ask"
-                icon={Icon.ArrowRight}
-                shortcut={{ modifiers: ["cmd"], key: "enter" }}
-                onAction={() => sendFollowUp(searchText)}
-              />
-            </ActionPanel>
-          }
+          actions={renderActions()}
         />
       ) : (
         messages.map((m, idx) => (
@@ -364,16 +446,7 @@ export default function StreamingNewChat({ request, chatId, apiKey, scopeId }: S
             key={m.id || `${m.role}-${idx}`}
             title={formatPreviewContent(m.content) || (m.role === "user" ? "You" : "🧠 v0 is thinking…")}
             detail={<List.Item.Detail markdown={formatFullMessageContent(m.content) || "_…_"} />}
-            actions={
-              <ActionPanel>
-                <Action
-                  title="Ask"
-                  icon={Icon.ArrowRight}
-                  shortcut={{ modifiers: ["cmd"], key: "enter" }}
-                  onAction={() => sendFollowUp(searchText)}
-                />
-              </ActionPanel>
-            }
+            actions={renderActions()}
           />
         ))
       )}
