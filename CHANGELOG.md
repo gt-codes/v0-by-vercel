@@ -8,6 +8,7 @@
 - Chat responses now stream in as chunks are received
 - Open existing chats from the list in a detail view
 - Follow-ups: ask additional questions from chat detail with seamless streaming integration
+- Initialize chats from v0 community templates
 
 ### Changed
 

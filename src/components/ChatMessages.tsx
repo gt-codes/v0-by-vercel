@@ -1,9 +1,9 @@
-import { List, ActionPanel, Action, Icon, Keyboard } from "@raycast/api";
+import { List, ActionPanel, Action, Icon, Keyboard, showToast, Toast } from "@raycast/api";
 import { useCachedPromise } from "@raycast/utils";
 import { useEffect, useRef, useState } from "react";
 import { streamV0 } from "../lib/v0-stream";
 import { v0ApiFetcher } from "../lib/v0-api-utils";
-import type { ChatDetailResponse, VersionDetail } from "../types";
+import type { ChatDetailResponse, VersionDetail, CreateMessageRequest } from "../types";
 import ChatFilesDetail from "./ChatFilesDetail";
 import type { CreateChatRequest } from "../types";
 
@@ -21,17 +21,21 @@ interface ChatMessagesProps {
   chatId?: string;
   apiKey: string;
   scopeId?: string;
+  // Optional follow-up request to stream immediately for existing chats
+  followUpRequest?: CreateMessageRequest;
 }
 
-export default function ChatMessages({ request, chatId, apiKey, scopeId }: ChatMessagesProps) {
+export default function ChatMessages({ request, chatId, apiKey, scopeId, followUpRequest }: ChatMessagesProps) {
   // Core state management
   const [assistantContent, setAssistantContent] = useState("");
   const [finalChatId, setChatId] = useState<string | undefined>(undefined);
   const chatIdRef = useRef<string | undefined>(undefined);
   const [currentChatId, setCurrentChatId] = useState<string | undefined>(chatId);
-  const [isStreaming, setIsStreaming] = useState(true);
+  // Start streaming immediately only for new chat creation; otherwise idle until follow-up starts
+  const [isStreaming, setIsStreaming] = useState(!!request);
   const [allowAutoRevalidate, setAllowAutoRevalidate] = useState(!!chatId);
   const abortRef = useRef<(() => void) | null>(null);
+  const hasTriggeredInitialFollowUpRef = useRef(false);
 
   // UI state
   const [searchText, setSearchText] = useState("");
@@ -377,7 +381,10 @@ export default function ChatMessages({ request, chatId, apiKey, scopeId }: ChatM
    * Manages sending additional messages to existing chats with optimistic UI
    * updates and proper streaming integration.
    */
-  const sendFollowUp = (text: string) => {
+  const sendFollowUpRequest = (req: CreateMessageRequest) => {
+    const text = (req.message || "").trim();
+    const attachments = req.attachments;
+    const modelConfiguration = req.modelConfiguration;
     const trimmed = text.trim();
     if (!trimmed || isStreaming) return;
 
@@ -402,7 +409,12 @@ export default function ChatMessages({ request, chatId, apiKey, scopeId }: ChatM
         Authorization: `Bearer ${apiKey}`,
         "x-scope": scopeId || "",
       },
-      body: { message: trimmed, responseMode: "experimental_stream" },
+      body: {
+        message: trimmed,
+        ...(attachments && attachments.length > 0 ? { attachments } : {}),
+        ...(modelConfiguration ? { modelConfiguration } : {}),
+        responseMode: "experimental_stream",
+      },
       onDelta: (delta) => {
         const streamId = currentStreamIdRef.current;
         if (!streamId) return;
@@ -448,14 +460,70 @@ export default function ChatMessages({ request, chatId, apiKey, scopeId }: ChatM
           // Ignore revalidation errors
         }
       },
-      onError: () => {
+      onError: async (err) => {
         setIsStreaming(false);
         abortRef.current = null;
+        try {
+          await showToast({
+            style: Toast.Style.Failure,
+            title: "Stream error",
+            message: err?.message || "Unknown error",
+          });
+        } catch {}
       },
       debug: true,
     });
     abortRef.current = abort;
   };
+
+  // Backwards compatibility helper: keep existing string-based callsites
+  const sendFollowUp = (text: string) => sendFollowUpRequest({ message: text });
+
+  // If a follow-up request was provided, trigger it once on mount/update
+  useEffect(() => {
+    if (!followUpRequest) return;
+    if (hasTriggeredInitialFollowUpRef.current) return;
+    if (!chatId) return; // needs an existing chat id
+    hasTriggeredInitialFollowUpRef.current = true;
+
+    // Strategy: First fetch current messages for the existing chat, then start the follow-up stream
+    const run = async () => {
+      try {
+        // Temporarily pause auto revalidation to avoid competing fetches
+        setAllowAutoRevalidate(false);
+        setIsInitializing(true);
+        const detail = await v0ApiFetcher<ChatDetailResponse>(`https://api.v0.dev/v1/chats/${chatId}`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "x-scope": scopeId || "",
+          },
+        });
+        if (detail) {
+          const d = detail as unknown as { name?: string; title?: string };
+          if (d?.name || d?.title) {
+            setChatTitle((d.name || d.title) as string);
+          }
+          if (detail?.latestVersion) setLatestVersion(detail.latestVersion);
+          type M = { id: string; role: "user" | "assistant"; content: string; createdAt: string };
+          const rows = (detail.messages as M[]).map((m) => ({
+            id: m.id,
+            role: m.role,
+            content: sanitizeMarkdown(m.content || ""),
+            createdAt: m.createdAt || nowIso(),
+          }));
+          setMessages(sortNewestFirst(rows));
+        }
+      } catch {
+        // ignore snapshot fetch errors; follow-up stream will still proceed
+      } finally {
+        setIsInitializing(false);
+        // Start follow-up streaming after snapshot
+        sendFollowUpRequest(followUpRequest);
+      }
+    };
+    run();
+  }, [followUpRequest, chatId, apiKey, scopeId]);
 
   const renderActions = () => (
     <ActionPanel>
