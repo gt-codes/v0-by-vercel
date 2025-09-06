@@ -89,11 +89,11 @@ export default function ChatMessages({ request, chatId, apiKey, scopeId, followU
     formattedContent = formattedContent.replace(/<CodeProject[^>]*>[\s\S]*?<\/CodeProject>/g, "");
     formattedContent = formattedContent.replace(/<Actions>[\s\S]*?<\/Actions>/g, "");
     formattedContent = formattedContent.replace(
-      /<V0LaunchTasks>[\s\S]*?<V0Task[^>]*taskNameActive=\"([^\"]*)\"[^>]*?\/>[\s\S]*?<\/V0LaunchTasks>/g,
+      /<V0LaunchTasks>[\s\S]*?<V0Task[^>]*taskNameActive="([^"]*)"[^>]*?\/>[\s\S]*?<\/V0LaunchTasks>/g,
       "**v0 is working on:** $1\n",
     );
     formattedContent = formattedContent.replace(
-      /<V0LaunchTasks>[\s\S]*?<V0Task[^>]*taskNameComplete=\"([^\"]*)\"[^>]*?\/>[\s\S]*?<\/V0LaunchTasks>/g,
+      /<V0LaunchTasks>[\s\S]*?<V0Task[^>]*taskNameComplete="([^"]*)"[^>]*?\/>[\s\S]*?<\/V0LaunchTasks>/g,
       "**v0 has completed:** $1\n",
     );
     formattedContent = formattedContent.replace(/<V0LaunchTasks>[\s\S]*?<\/V0LaunchTasks>/g, "");
@@ -110,11 +110,11 @@ export default function ChatMessages({ request, chatId, apiKey, scopeId, followU
     previewContent = previewContent.replace(/<CodeProject[^>]*>[\s\S]*?<\/CodeProject>/g, "");
     previewContent = previewContent.replace(/<Actions>[\s\S]*?<\/Actions>/g, "");
     previewContent = previewContent.replace(
-      /<V0LaunchTasks>[\s\S]*?<V0Task[^>]*taskNameActive=\"([^\"]*)\"[^>]*?\/>[\s\S]*?<\/V0LaunchTasks>/g,
+      /<V0LaunchTasks>[\s\S]*?<V0Task[^>]*taskNameActive="([^"]*)"[^>]*?\/>[\s\S]*?<\/V0LaunchTasks>/g,
       "**v0 is working on:** $1 ",
     );
     previewContent = previewContent.replace(
-      /<V0LaunchTasks>[\s\S]*?<V0Task[^>]*taskNameComplete=\"([^\"]*)\"[^>]*?\/>[\s\S]*?<\/V0LaunchTasks>/g,
+      /<V0LaunchTasks>[\s\S]*?<V0Task[^>]*taskNameComplete="([^"]*)"[^>]*?\/>[\s\S]*?<\/V0LaunchTasks>/g,
       "**v0 has completed:** $1 ",
     );
     previewContent = previewContent.replace(/<V0LaunchTasks>[\s\S]*?<\/V0LaunchTasks>/g, "");
@@ -469,7 +469,9 @@ export default function ChatMessages({ request, chatId, apiKey, scopeId, followU
             title: "Stream error",
             message: err?.message || "Unknown error",
           });
-        } catch {}
+        } catch {
+          void 0;
+        }
       },
       debug: true,
     });

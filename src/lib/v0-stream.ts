@@ -94,7 +94,7 @@ export function streamV0({ url, headers, body, onDelta, onDone, onError, onChatU
       const extractTextFromDelta = (delta: unknown): string => {
         try {
           const json = JSON.stringify(delta);
-          const re = /\[\s*"text"\s*,\s*\{[^\}]*\}\s*,\s*"([\s\S]*?)"\s*\]/g;
+          const re = /\[\s*"text"\s*,\s*\{[^}]*\}\s*,\s*"([\s\S]*?)"\s*\]/g;
           const parts: string[] = [];
           let m: RegExpExecArray | null = re.exec(json);
           while (m !== null) {
@@ -168,7 +168,9 @@ export function streamV0({ url, headers, body, onDelta, onDone, onError, onChatU
                 onDone();
                 try {
                   controller.abort();
-                } catch {}
+                } catch {
+                  void 0;
+                }
                 break;
               }
             } else if (isStreamDelta(parsedUnknown)) {
@@ -184,7 +186,9 @@ export function streamV0({ url, headers, body, onDelta, onDone, onError, onChatU
                   onDone();
                   try {
                     controller.abort();
-                  } catch {}
+                  } catch {
+                    void 0;
+                  }
                   break;
                 }
               } catch {
@@ -210,7 +214,9 @@ export function streamV0({ url, headers, body, onDelta, onDone, onError, onChatU
                 onDone();
                 try {
                   controller.abort();
-                } catch {}
+                } catch {
+                  void 0;
+                }
                 break;
               }
               const deltaText =
